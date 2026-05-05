@@ -367,6 +367,16 @@ def send_telegram(message: str, chat_id: str | None = None) -> None:
         },
         timeout=20,
     )
+    if response.status_code == 404:
+        raise ConfigError(
+            "Telegram API returned 404. Check TELEGRAM_BOT_TOKEN. "
+            "It should look like 123456789:ABCDEF..., without 'bot' prefix, quotes, or spaces."
+        )
+    if response.status_code == 400:
+        raise ConfigError(
+            "Telegram API returned 400. Check TELEGRAM_CHAT_ID and make sure the bot is an admin "
+            "with permission to post in the channel."
+        )
     response.raise_for_status()
 
 
