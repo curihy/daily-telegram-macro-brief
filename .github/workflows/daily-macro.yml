@@ -3,7 +3,7 @@ name: Daily Macro Brief
 on:
   workflow_dispatch:
   schedule:
-    - cron: "30 22 * * 1-5"
+    - cron: "31 22 * * 1-5"
 
 jobs:
   send:
