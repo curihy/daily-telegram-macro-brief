@@ -4,8 +4,10 @@ import html
 import os
 import sys
 import traceback
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from urllib.parse import quote_plus
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -33,6 +35,15 @@ class FredSeries:
 MARKET_TICKERS = [
     MarketTicker("^GSPC", "S&P 500"),
     MarketTicker("^NDX", "Nasdaq 100"),
+    MarketTicker("^SOX", "SOX"),
+    MarketTicker("SOXX", "SOXX ETF"),
+    MarketTicker("SMH", "SMH ETF"),
+    MarketTicker("NVDA", "Nvidia"),
+    MarketTicker("AMD", "AMD"),
+    MarketTicker("AVGO", "Broadcom"),
+    MarketTicker("MU", "Micron"),
+    MarketTicker("TSM", "TSMC ADR"),
+    MarketTicker("ASML", "ASML ADR"),
     MarketTicker("^RUT", "Russell 2000"),
     MarketTicker("^VIX", "VIX"),
     MarketTicker("DX-Y.NYB", "DXY"),
@@ -43,6 +54,9 @@ MARKET_TICKERS = [
     MarketTicker("HG=F", "Copper"),
     MarketTicker("^KS11", "KOSPI"),
     MarketTicker("^KQ11", "KOSDAQ"),
+    MarketTicker("005930.KS", "Samsung Electronics"),
+    MarketTicker("000660.KS", "SK Hynix"),
+    MarketTicker("091160.KS", "KODEX Semiconductor"),
     MarketTicker("^N225", "Nikkei 225"),
     MarketTicker("^HSI", "Hang Seng"),
 ]
@@ -53,6 +67,16 @@ FRED_SERIES = [
     FredSeries("T10Y2Y", "10Y-2Y"),
     FredSeries("BAMLH0A0HYM2", "HY Spread"),
     FredSeries("SOFR", "SOFR"),
+]
+
+NEWS_QUERIES = [
+    "Nvidia AI data center capex semiconductor",
+    "SK Hynix HBM Samsung Electronics semiconductor",
+    "TSMC ASML Micron AI semiconductor",
+    "US China semiconductor export controls",
+    "Korea semiconductor stocks foreign investors",
+    "war oil Middle East market risk",
+    "AI investment Microsoft Meta Google Amazon capex",
 ]
 
 
@@ -203,6 +227,53 @@ def fetch_rates_snapshot() -> list[dict]:
     return rows
 
 
+def fetch_news_rss(query: str, limit: int = 4) -> list[dict]:
+    url = (
+        "https://news.google.com/rss/search?"
+        f"q={quote_plus(query)}&hl=ko&gl=KR&ceid=KR:ko"
+    )
+    response = requests.get(
+        url,
+        timeout=20,
+        headers={"User-Agent": "daily-macro-brief/1.0"},
+    )
+    response.raise_for_status()
+    root = ET.fromstring(response.content)
+    items = []
+    for item in root.findall("./channel/item")[:limit]:
+        title = item.findtext("title", default="").strip()
+        link = item.findtext("link", default="").strip()
+        source = item.findtext("source", default="").strip()
+        published = item.findtext("pubDate", default="").strip()
+        if title:
+            items.append(
+                {
+                    "query": query,
+                    "title": title,
+                    "source": source,
+                    "published": published,
+                    "link": link,
+                }
+            )
+    return items
+
+
+def fetch_news_snapshot() -> list[dict]:
+    seen: set[str] = set()
+    news: list[dict] = []
+    for query in NEWS_QUERIES:
+        try:
+            for item in fetch_news_rss(query):
+                key = item["title"].lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+                news.append(item)
+        except (requests.RequestException, ET.ParseError):
+            continue
+    return news[:24]
+
+
 def get_change(market: pd.DataFrame, label: str) -> float | None:
     if market.empty or "label" not in market.columns:
         return None
@@ -292,48 +363,252 @@ def build_watch_items(market: pd.DataFrame, rates: list[dict]) -> list[str]:
     return items[:4]
 
 
-def format_report(market: pd.DataFrame, rates: list[dict]) -> str:
+def find_market_row(market: pd.DataFrame, label: str) -> dict | None:
+    matched = market.loc[market["label"] == label]
+    if matched.empty:
+        return None
+    return matched.iloc[0].to_dict()
+
+
+def summarize_market_context(market: pd.DataFrame, rates: list[dict]) -> str:
+    labels = [
+        "Nasdaq 100",
+        "SOX",
+        "SOXX ETF",
+        "SMH ETF",
+        "Nvidia",
+        "AMD",
+        "Broadcom",
+        "Micron",
+        "TSMC ADR",
+        "ASML ADR",
+        "Samsung Electronics",
+        "SK Hynix",
+        "KODEX Semiconductor",
+        "VIX",
+        "DXY",
+        "USD/KRW",
+        "WTI",
+        "Gold",
+        "KOSPI",
+        "KOSDAQ",
+        "Nikkei 225",
+        "Hang Seng",
+    ]
+    lines = []
+    for label in labels:
+        row = find_market_row(market, label)
+        if not row:
+            continue
+        lines.append(
+            f"{label}: latest {compact_number(row['latest'])}, "
+            f"1D {pct(row['day_change'])}, 5D {pct(row['week_change'])}"
+        )
+    for row in rates:
+        lines.append(f"{row['label']}: {row['latest']:.2f}{row['suffix']}, {bp(row['change_bp'])}")
+    return "\n".join(lines)
+
+
+def summarize_news_context(news: list[dict]) -> str:
+    lines = []
+    for item in news[:20]:
+        source = f" ({item['source']})" if item.get("source") else ""
+        lines.append(f"- {item['title']}{source}")
+    return "\n".join(lines)
+
+
+def call_openrouter(market: pd.DataFrame, rates: list[dict], news: list[dict]) -> str | None:
+    api_key = env("OPENROUTER_API_KEY")
+    if not api_key or api_key == "replace_me":
+        return None
+
+    model = env("OPENROUTER_MODEL", "openrouter/auto")
+    today = datetime.now(ZoneInfo(env("TIMEZONE", "Asia/Seoul"))).strftime("%Y-%m-%d")
+    prompt = f"""
+오늘 날짜: {today}
+목표: 한국장 개장 전 삼성전자, SK하이닉스, 반도체 소부장 ETF 관점의 bold한 투자 판단.
+제약:
+- 한국어로 작성.
+- 전체 항목은 정확히 10개.
+- 각 항목은 제목 1줄 + 세부 내용 최대 3줄.
+- 숫자 중심, 짧고 단호하게.
+- 오늘 전망, 이번주 전망, 한 달 전망, AI 혁명이 주식 관점에서 어디까지 왔는지 반드시 포함.
+- 장기금리, 전쟁/유가, 중국 규제, 아시아 상대우위, 빅테크 AI 투자 동향을 반드시 반영.
+- 최종 판단은 '매수 우위', '보유', '관망', '일부 차익실현', '방어' 중 하나 이상을 명시.
+- 확실하지 않은 뉴스는 단정하지 말고 '확인 필요'라고 써라.
+
+[시장 데이터]
+{summarize_market_context(market, rates)}
+
+[무료 뉴스/RSS 헤드라인]
+{summarize_news_context(news)}
+""".strip()
+
+    response = requests.post(
+        "https://openrouter.ai/api/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": env("OPENROUTER_SITE_URL", "https://github.com/curihy/daily-telegram-macro-brief"),
+            "X-Title": env("OPENROUTER_APP_NAME", "Daily Korean Semiconductor Brief"),
+        },
+        json={
+            "model": model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a concise Korean market strategist. "
+                        "You synthesize market data and news into bold but caveated investment views."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": 0.2,
+            "max_tokens": 1400,
+        },
+        timeout=45,
+    )
+    response.raise_for_status()
+    data = response.json()
+    return data["choices"][0]["message"]["content"].strip()
+
+
+def call_ollama(market: pd.DataFrame, rates: list[dict], news: list[dict]) -> str | None:
+    model = env("OLLAMA_MODEL")
+    if not model:
+        return None
+
+    host = env("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
+    today = datetime.now(ZoneInfo(env("TIMEZONE", "Asia/Seoul"))).strftime("%Y-%m-%d")
+    prompt = f"""
+오늘 날짜: {today}
+목표: 한국장 개장 전 삼성전자, SK하이닉스, 반도체 소부장 ETF 관점의 bold한 투자 판단.
+제약:
+- 한국어로 작성.
+- 전체 항목은 정확히 10개.
+- 각 항목은 제목 1줄 + 세부 내용 최대 3줄.
+- 숫자 중심, 짧고 단호하게.
+- 오늘 전망, 이번주 전망, 한 달 전망, AI 혁명이 주식 관점에서 어디까지 왔는지 반드시 포함.
+- 장기금리, 전쟁/유가, 중국 규제, 아시아 상대우위, 빅테크 AI 투자 동향을 반드시 반영.
+- 최종 판단은 '매수 우위', '보유', '관망', '일부 차익실현', '방어' 중 하나 이상을 명시.
+- 확실하지 않은 뉴스는 단정하지 말고 '확인 필요'라고 써라.
+- 사고 과정은 출력하지 말고 최종 리포트만 출력하라. /no_think
+
+[시장 데이터]
+{summarize_market_context(market, rates)}
+
+[무료 뉴스/RSS 헤드라인]
+{summarize_news_context(news)}
+""".strip()
+
+    response = requests.post(
+        f"{host}/api/chat",
+        json={
+            "model": model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a concise Korean market strategist. "
+                        "Return only the final report, not hidden reasoning."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            "stream": False,
+            "options": {
+                "temperature": 0.2,
+                "num_ctx": int(env("OLLAMA_NUM_CTX", "16384")),
+            },
+        },
+        timeout=int(env("OLLAMA_TIMEOUT", "300")),
+    )
+    response.raise_for_status()
+    return response.json()["message"]["content"].strip()
+
+
+def format_fallback_semiconductor_report(market: pd.DataFrame, rates: list[dict], news: list[dict]) -> str:
+    tz_name = env("TIMEZONE", "Asia/Seoul")
+    now = datetime.now(ZoneInfo(tz_name))
+    regime, notes = build_regime(market, rates)
+    sox = get_change(market, "SOX")
+    nvda = get_change(market, "Nvidia")
+    hynix = get_change(market, "SK Hynix")
+    samsung = get_change(market, "Samsung Electronics")
+    krw = get_change(market, "USD/KRW")
+    vix = get_change(market, "VIX")
+    ten_year = next((row for row in rates if row["label"] == "US 10Y"), None)
+    ten_year_change = ten_year["change_bp"] if ten_year else None
+
+    score = 0
+    for value in [sox, nvda, hynix]:
+        if value is not None:
+            score += 1 if value > 1 else -1 if value < -1 else 0
+    if ten_year_change is not None:
+        score += -1 if ten_year_change > 5 else 1 if ten_year_change < -5 else 0
+    if krw is not None:
+        score += -1 if krw > 0.4 else 1 if krw < -0.4 else 0
+    if vix is not None:
+        score += -1 if vix > 5 else 1 if vix < -5 else 0
+
+    if score >= 3:
+        call = "매수 우위"
+        today_view = "강세"
+    elif score >= 1:
+        call = "보유"
+        today_view = "강보합"
+    elif score <= -3:
+        call = "방어"
+        today_view = "약세"
+    elif score <= -1:
+        call = "일부 차익실현"
+        today_view = "혼조"
+    else:
+        call = "관망"
+        today_view = "중립"
+
+    top_news = [item["title"] for item in news[:5]]
+    news_line = " / ".join(top_news[:2]) if top_news else "무료 RSS에서 핵심 뉴스 확인 제한"
+
+    lines = [
+        f"<b>AI 반도체 6AM</b> {now:%Y-%m-%d}",
+        f"1. 최종 판단: <b>{html.escape(call)}</b>",
+        f"   오늘 {today_view}, 시장 톤 {regime}. SOX {pct(sox)}, Nvidia {pct(nvda)}.",
+        f"2. 한국 대장주: 삼성전자 {pct(samsung)}, SK하이닉스 {pct(hynix)}.",
+        "   HBM/AI 노출도가 큰 하이닉스 우위, 삼성은 메모리/파운드리 뉴스 확인.",
+        f"3. 소부장 ETF 관점: SOXX {pct(get_change(market, 'SOXX ETF'))}, SMH {pct(get_change(market, 'SMH ETF'))}.",
+        "   갭상승 추격보다 SOX와 환율이 동시에 우호적일 때 눌림 매수 우선.",
+        f"4. 금리 브레이크: US 10Y {bp(ten_year_change)}.",
+        "   10Y 급등은 AI 장기 성장주의 밸류에이션을 바로 누르는 변수.",
+        f"5. 환율/수급: USD/KRW {pct(krw)}, DXY {pct(get_change(market, 'DXY'))}.",
+        "   원화 약세가 커지면 외국인 한국 반도체 수급은 방어적으로 해석.",
+        f"6. 위험지표: VIX {pct(vix)}, WTI {pct(get_change(market, 'WTI'))}.",
+        "   전쟁/유가 급등은 인플레와 금리 재상승 경로로 반도체에 부정적.",
+        "7. 중국 규제: 신규 악재는 뉴스 헤드라인으로 확인 필요.",
+        "   대중 수출규제 강화는 장비/AI칩 체인에 즉시 할인 요인.",
+        "8. 아시아 상대우위: 한국은 HBM, 대만은 파운드리, 일본은 장비/소재.",
+        "   AI 서버 수요가 유지되면 한국은 메모리 사이클에서 상대 매력 유지.",
+        f"9. AI 사이클 위치: 인프라 CAPEX 확장 국면.",
+        f"   최신 뉴스: {html.escape(news_line[:180])}",
+        f"10. 이번주/1개월: {call} 유지, 단 금리+환율+Nvidia 동반 악화 시 방어.",
+        "   AI 혁명은 아직 실적 검증 전반부지만 단기 주가는 과열을 반복할 수 있음.",
+    ]
+    return "\n".join(lines)
+
+
+def format_report(market: pd.DataFrame, rates: list[dict], news: list[dict]) -> str:
     if market.empty:
         raise RuntimeError("No market data was downloaded.")
 
-    tz_name = env("TIMEZONE", "Asia/Seoul")
-    now = datetime.now(ZoneInfo(tz_name))
-    title = env("REPORT_TITLE", "Daily Macro Brief")
-    regime, notes = build_regime(market, rates)
-    watch_items = build_watch_items(market, rates)
+    local_report = call_ollama(market, rates, news)
+    if local_report:
+        return html.escape(local_report).replace("\n", "\n")
 
-    lines = [
-        f"<b>{html.escape(title)}</b>",
-        f"{now:%Y-%m-%d %H:%M} {html.escape(tz_name)}",
-        "",
-        f"<b>시장 톤:</b> {html.escape(regime)}",
-        "",
-        "<b>주요 시장</b>",
-    ]
-
-    lines.extend(section_market_rows(market, ["S&P 500", "Nasdaq 100", "Russell 2000", "VIX"]))
-    lines.extend(["", "<b>환율/원자재</b>"])
-    lines.extend(section_market_rows(market, ["DXY", "USD/KRW", "USD/JPY", "WTI", "Gold", "Copper"]))
-    lines.extend(["", "<b>아시아</b>"])
-    lines.extend(section_market_rows(market, ["KOSPI", "KOSDAQ", "Nikkei 225", "Hang Seng"]))
-
-    if rates:
-        lines.extend(["", "<b>금리/크레딧</b>"])
-        for row in rates:
-            lines.append(
-                f"- {html.escape(row['label'])}: {row['latest']:.2f}{html.escape(row['suffix'])} "
-                f"({bp(row['change_bp'])})"
-            )
-
-    lines.extend(["", "<b>해석</b>"])
-    for note in notes:
-        lines.append(f"- {html.escape(note)}")
-
-    lines.extend(["", "<b>체크포인트</b>"])
-    for item in watch_items:
-        lines.append(f"- {html.escape(item)}")
-    lines.extend(["", "<i>자동 생성 리포트입니다. 투자 판단은 별도 검증이 필요합니다.</i>"])
-    return "\n".join(lines)
+    llm_report = call_openrouter(market, rates, news)
+    if llm_report:
+        return html.escape(llm_report).replace("\n", "\n")
+    return format_fallback_semiconductor_report(market, rates, news)
 
 
 def split_message(message: str, limit: int = 3800) -> list[str]:
@@ -400,7 +675,8 @@ def main() -> None:
     try:
         market = fetch_market_snapshot()
         rates = fetch_rates_snapshot()
-        report = format_report(market, rates)
+        news = fetch_news_snapshot()
+        report = format_report(market, rates, news)
         print(report)
 
         if env("DRY_RUN").lower() in {"1", "true", "yes"}:

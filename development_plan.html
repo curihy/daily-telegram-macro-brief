@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Semiconductor 6AM 개발 플랜</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17202a;
+      --muted: #667085;
+      --line: #d6dae2;
+      --paper: #f7f8fb;
+      --panel: #ffffff;
+      --accent: #0f766e;
+      --accent-soft: #d9f3ef;
+      --warn: #9a3412;
+      --warn-soft: #ffedd5;
+      --good: #166534;
+      --good-soft: #dcfce7;
+      --code: #111827;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+
+    main {
+      width: min(1040px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 40px 0 64px;
+    }
+
+    header {
+      border-bottom: 2px solid var(--ink);
+      padding-bottom: 24px;
+      margin-bottom: 28px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(30px, 5vw, 54px);
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      font-size: 24px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 0 0 10px;
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0 0 12px;
+    }
+
+    .subtitle {
+      max-width: 760px;
+      color: var(--muted);
+      font-size: 17px;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 18px;
+    }
+
+    .chip {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 999px;
+      padding: 6px 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 22px;
+      margin: 18px 0;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      background: #fff;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 4px 9px;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .status.todo {
+      color: var(--warn);
+      background: var(--warn-soft);
+    }
+
+    .status.done {
+      color: var(--good);
+      background: var(--good-soft);
+    }
+
+    .status.now {
+      color: var(--accent);
+      background: var(--accent-soft);
+    }
+
+    ol, ul {
+      margin: 0;
+      padding-left: 22px;
+    }
+
+    li {
+      margin: 8px 0;
+    }
+
+    code, pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    code {
+      color: var(--code);
+      background: #eef2f7;
+      border-radius: 5px;
+      padding: 2px 5px;
+      font-size: 0.92em;
+    }
+
+    pre {
+      overflow-x: auto;
+      background: #111827;
+      color: #f9fafb;
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 13px;
+      line-height: 1.45;
+      margin: 12px 0 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 14px;
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 10px 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .timeline {
+      display: grid;
+      gap: 12px;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      gap: 14px;
+      border-top: 1px solid var(--line);
+      padding-top: 14px;
+    }
+
+    .step:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    .day {
+      color: var(--accent);
+      font-weight: 800;
+    }
+
+    .decision {
+      border-left: 5px solid var(--accent);
+    }
+
+    .small {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 760px) {
+      main {
+        width: min(100% - 24px, 1040px);
+        padding-top: 28px;
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .step {
+        grid-template-columns: 1fr;
+        gap: 4px;
+      }
+
+      section {
+        padding: 18px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>AI Semiconductor 6AM 개발 플랜</h1>
+      <p class="subtitle">
+        한국장 개장 전 삼성전자, SK하이닉스, 반도체 소부장 ETF 관점에서
+        매크로·뉴스·AI 투자 사이클을 종합해 Telegram으로 보내는 자동화 개발 계획입니다.
+      </p>
+      <div class="meta">
+        <span class="chip">대상: 한국 반도체 투자 판단</span>
+        <span class="chip">시간: 매일 06:00 KST</span>
+        <span class="chip">LLM: OpenRouter free 우선</span>
+        <span class="chip">Fallback: 규칙 기반, 로컬 Qwen은 선택</span>
+      </div>
+    </header>
+
+    <section class="decision">
+      <h2>개발 방향</h2>
+      <p>
+        1차 목표는 GitHub Actions에서 <code>qwen/qwen3-32b:free</code>를 호출해
+        Mac이 꺼져 있어도 매일 06:00에 리포트를 받는 것입니다.
+      </p>
+      <p>
+        로컬 Qwen/Ollama는 품질 비교와 주간 심층 분석용으로 남기되,
+        배터리 잠자기 상태가 많은 생활 패턴을 고려해 운영 경로에서는 제외합니다.
+      </p>
+    </section>
+
+    <section>
+      <h2>시스템 구성</h2>
+      <div class="grid">
+        <div class="card">
+          <span class="status now">Primary</span>
+          <h3>GitHub Actions + OpenRouter free</h3>
+          <ul>
+            <li>Mac이 꺼져 있어도 GitHub 서버에서 실행</li>
+            <li><code>qwen/qwen3-32b:free</code>로 최종 10항목 리포트 생성</li>
+            <li>UTC 일-목 21:00, 한국시간 월-금 06:00 실행</li>
+            <li>Telegram Bot API로 채널 발송</li>
+          </ul>
+        </div>
+        <div class="card">
+          <span class="status todo">Optional</span>
+          <h3>로컬 Qwen/Ollama</h3>
+          <ul>
+            <li>Mac이 켜져 있을 때 수동 비교</li>
+            <li><code>qwen3:32b</code> 또는 <code>qwen3:14b</code> 테스트</li>
+            <li>주간 심층 리포트에 활용</li>
+            <li>운영 자동화에는 사용하지 않음</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>데이터 입력</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>영역</th>
+            <th>데이터</th>
+            <th>목적</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>미국 반도체</td>
+            <td>SOX, SOXX, SMH, Nvidia, AMD, Broadcom, Micron, TSMC, ASML</td>
+            <td>한국 반도체 개장 전 심리와 선행 신호 판단</td>
+          </tr>
+          <tr>
+            <td>한국 반도체</td>
+            <td>삼성전자, SK하이닉스, KODEX 반도체</td>
+            <td>대장주와 소부장 ETF 수준의 상대 강도 확인</td>
+          </tr>
+          <tr>
+            <td>매크로 브레이크</td>
+            <td>미국 10Y, 2Y, DXY, USD/KRW, VIX, WTI, HY spread</td>
+            <td>랠리를 멈출 수 있는 금리·환율·유가·위험 회피 신호 감지</td>
+          </tr>
+          <tr>
+            <td>뉴스</td>
+            <td>Google News RSS 기반 AI, 반도체, 중국 규제, 전쟁, 빅테크 CAPEX</td>
+            <td>주가에 영향을 줄 수 있는 무료 뉴스 헤드라인 종합</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>리포트 포맷</h2>
+      <p>최종 Telegram 메시지는 10개 항목으로 고정하고, 각 항목은 제목 1줄과 세부 내용 최대 3줄로 제한합니다.</p>
+      <pre>[AI 반도체 6AM] 2026-05-17
+
+1. 최종 판단: 매수 우위
+   SOX +1.2%, Nvidia +2.1%, 10Y +2bp로 매크로 브레이크 제한.
+   한국 반도체는 강보합 출발 가능성이 높음.
+
+2. 오늘 전망
+   SK하이닉스/HBM 체인이 삼성전자보다 우위.
+   갭상승 추격보다 눌림 매수 우선.
+
+...
+
+10. 방어 조건
+   10Y 급등, USD/KRW 급등, Nvidia 급락이 동시에 나오면 방어 전환.</pre>
+    </section>
+
+    <section>
+      <h2>개발 단계</h2>
+      <div class="timeline">
+        <div class="step">
+          <div class="day">Step 1</div>
+          <div>
+            <h3>OpenRouter free 연결</h3>
+            <p>GitHub Secrets에 <code>OPENROUTER_API_KEY</code>를 등록하고 <code>qwen/qwen3-32b:free</code> 모델로 수동 실행합니다.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="day">Step 2</div>
+          <div>
+            <h3>품질 평가</h3>
+            <p>3일치 리포트를 저장해 판단 강도, 한국어 품질, 뉴스 반영도, 숫자 정확성을 확인합니다.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="day">Step 3</div>
+          <div>
+            <h3>무료 모델 실패 기준</h3>
+            <p>free 모델이 rate limit, timeout, 품질 저하를 반복하면 다른 <code>:free</code> 모델 또는 저가 Qwen 모델로 교체합니다.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="day">Step 4</div>
+          <div>
+            <h3>자동 실행</h3>
+            <p>GitHub Actions의 schedule을 사용합니다. 현재 설정은 한국시간 월-금 06:00입니다.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="day">Step 5</div>
+          <div>
+            <h3>백업 경로 유지</h3>
+            <p>OpenRouter가 실패하면 규칙 기반 fallback이 Telegram 메시지를 보내도록 유지합니다.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>운영 체크리스트</h2>
+      <div class="grid">
+        <div class="card">
+          <span class="status done">Ready</span>
+          <h3>필수 설정</h3>
+          <ul>
+            <li><code>TELEGRAM_BOT_TOKEN</code></li>
+            <li><code>TELEGRAM_CHAT_ID</code></li>
+            <li><code>FRED_API_KEY</code></li>
+            <li><code>OPENROUTER_API_KEY</code></li>
+            <li><code>OPENROUTER_MODEL=qwen/qwen3-32b:free</code></li>
+          </ul>
+        </div>
+        <div class="card">
+          <span class="status todo">Next</span>
+          <h3>검증 항목</h3>
+          <ul>
+            <li>Telegram 발송 성공 여부</li>
+            <li>리포트가 정확히 10개 항목인지</li>
+            <li>각 항목이 3줄 이내인지</li>
+            <li>금리·환율·뉴스가 결론에 반영되는지</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>명령어</h2>
+      <pre>cd /Users/hyeyoung/Documents/Codex/2026-05-05/telegram
+source .venv/bin/activate
+DRY_RUN=1 python macro_brief.py
+
+git add macro_brief.py .env.example .github/workflows/daily-macro.yml development_plan.html
+git commit -m "Use OpenRouter free model as primary"
+git push</pre>
+      <p class="small">
+        OpenRouter free 모델은 무료로 시작하기 좋지만, 혼잡하거나 제공 모델이 바뀔 수 있습니다.
+        실패가 반복되면 다른 free 모델이나 저가 유료 모델로 교체합니다.
+      </p>
+    </section>
+  </main>
+</body>
+</html>

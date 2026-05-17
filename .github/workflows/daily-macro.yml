@@ -3,7 +3,7 @@ name: Daily Macro Brief
 on:
   workflow_dispatch:
   schedule:
-    - cron: "1 6 * * 1-5"
+    - cron: "0 21 * * 0-4"
 
 jobs:
   send:
@@ -22,5 +22,9 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
-          REPORT_TITLE: Daily Macro Brief
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENROUTER_MODEL: qwen/qwen3-32b:free
+          OPENROUTER_SITE_URL: https://github.com/curihy/daily-telegram-macro-brief
+          OPENROUTER_APP_NAME: Daily Korean Semiconductor Brief
+          REPORT_TITLE: AI Semiconductor 6AM
           TIMEZONE: Asia/Seoul
