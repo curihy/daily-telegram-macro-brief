@@ -21,6 +21,12 @@ def bp(value: float | None) -> str:
     return f"{value:+.0f}bp"
 
 
+def won(value: int | float | None) -> str:
+    if value is None:
+        return "n/a"
+    return f"{value:,.0f}원"
+
+
 def score_signal(score: float | None) -> str:
     if score is None:
         return "⚪"
@@ -49,6 +55,30 @@ def risk_signal(text: str | None) -> str:
     if not text or text == "없음":
         return "🟢"
     return "🔴"
+
+
+def consensus_by_ticker(result: DailyResult, ticker: str):
+    return next((stock for stock in result.consensus.stocks if stock.ticker == ticker), None)
+
+
+def consensus_summary_line(stock) -> str:
+    if not stock:
+        return "컨센서스 n/a."
+    date = stock.consensus_date or "기준일 n/a"
+    opinion = f"{stock.opinion_score:.2f}" if stock.opinion_score is not None else "n/a"
+    institutions = stock.estimated_institutions if stock.estimated_institutions is not None else "n/a"
+    return f"{stock.name} 평균 목표가 {won(stock.average_target_price)} ({date}, 의견 {opinion}, {institutions}개 기관)."
+
+
+def top_targets_line(stock) -> str:
+    if not stock or not stock.top_targets:
+        return "Top5 목표가 n/a."
+    items = []
+    for target in stock.top_targets[:5]:
+        analyst = target.analyst or "담당자 미공개"
+        date = target.report_date or "일자 n/a"
+        items.append(f"{target.provider}/{analyst} {won(target.target_price)}({date})")
+    return "Top5 " + "; ".join(items) + "."
 
 
 def holder_action(score: float) -> str:
@@ -151,6 +181,8 @@ def render_report(result: DailyResult) -> str:
     nvda = result.nvidia.nvda
     sox = result.nvidia.sox
     macro = result.macro
+    samsung_consensus = consensus_by_ticker(result, "005930")
+    hynix_consensus = consensus_by_ticker(result, "000660")
     main = result.main_score
     jensen = result.jensen_score
     validation = result.validation
@@ -213,6 +245,16 @@ def render_report(result: DailyResult) -> str:
     ))
     lines.extend(numbered_item(
         4,
+        "증권사 컨센서스",
+        f"🧾 {consensus_summary_line(samsung_consensus)}",
+        f"🏆 삼성 {top_targets_line(samsung_consensus)}",
+        f"🧾 {consensus_summary_line(hynix_consensus)}",
+        f"🏆 하이닉스 {top_targets_line(hynix_consensus)}",
+        "무료 공개 소스 기준으로 애널리스트 개인명은 미공개인 경우가 많아 증권사/담당자 미공개로 표기합니다.",
+        icon="🧾",
+    ))
+    lines.extend(numbered_item(
+        5,
         "미국 선행지표",
         f"{trend_signal(nvda.change_5d_pct if nvda else None)} NVDA 5D {pct(nvda.change_5d_pct if nvda else None)}, {trend_signal(sox.change_5d_pct if sox else None)} SOX 5D {pct(sox.change_5d_pct if sox else None)}.",
         "NVDA와 SOX가 같이 강해야 한국 반도체 랠리 지속성이 높아집니다.",
@@ -222,7 +264,7 @@ def render_report(result: DailyResult) -> str:
         icon=jensen_icon,
     ))
     lines.extend(numbered_item(
-        5,
+        6,
         "매크로 브레이크",
         f"{trend_signal(macro.us_10y_change_bp, reverse=True)} 10Y {bp(macro.us_10y_change_bp)}, {trend_signal(macro.usd_krw_change_pct, reverse=True)} USD/KRW {pct(macro.usd_krw_change_pct)}, {trend_signal(macro.vix_change_pct, reverse=True)} VIX {pct(macro.vix_change_pct)}.",
         "금리와 원/달러가 동시에 오르면 외국인 수급과 밸류에이션에 부담입니다.",
@@ -231,10 +273,10 @@ def render_report(result: DailyResult) -> str:
         "10Y가 급등하면 AI 성장주의 장기 현금흐름 할인율 부담이 커집니다.",
         icon=macro_icon,
     ))
-    lines.extend(["", f"6. {jensen_icon} 젠슨 유니버스 카테고리별 10줄"])
+    lines.extend(["", f"7. {jensen_icon} 젠슨 유니버스 카테고리별 10줄"])
     lines.extend(category_lines)
     lines.extend(numbered_item(
-        7,
+        8,
         "리스크 체크",
         f"{risk_signal(risk_line)} {risk_line}",
         "리스크가 가격 강세보다 커지면 보유자는 비중 관리, 신규자는 진입 보류가 우선입니다.",
@@ -244,7 +286,7 @@ def render_report(result: DailyResult) -> str:
         icon=risk_signal(risk_line),
     ))
     lines.extend(numbered_item(
-        8,
+        9,
         "오늘 행동",
         "기존 보유자는 최약 팩터가 악화되지 않는 한 성급한 전량 매도는 피합니다.",
         "신규 진입자는 60점 미만에서 첫 진입을 서두르지 않습니다.",
@@ -252,16 +294,6 @@ def render_report(result: DailyResult) -> str:
         "오전 갭상승은 추격보다 30~60분 수급 확인 후 판단합니다.",
         "약세 출발 후 SOX/NVDA 선물이 버티면 눌림 반등 가능성을 열어둡니다.",
         icon="🧭",
-    ))
-    lines.extend(numbered_item(
-        9,
-        "다음 개선",
-        "KRX/네이버 수급 보조 수집은 붙었고, 다음 단계는 전일값 캐시 fallback 강화입니다.",
-        "수급과 HBM 뉴스가 누적되면 삼성전자·하이닉스·소부장 ETF 판단을 더 분리할 수 있습니다.",
-        "다음 단계에서는 HTML 리포트와 30일 스코어 추이 차트까지 확장합니다.",
-        "외인 수급은 신규 진입 타이밍과 기존 보유 비중 조절의 핵심 확인 신호로 씁니다.",
-        "HBM 뉴스 감성은 SK하이닉스와 후공정 소부장 판단력을 계속 보강합니다.",
-        icon="🛠️",
     ))
     lines.extend(numbered_item(
         10,

@@ -79,6 +79,32 @@ class FlowOutput(BaseModel):
     hynix_pbr: Optional[float] = None
 
 
+class BrokerTarget(BaseModel):
+    provider: str
+    analyst: Optional[str] = None
+    report_date: Optional[str] = None
+    target_price: Optional[int] = None
+    previous_target_price: Optional[int] = None
+    change_pct: Optional[float] = None
+    opinion: Optional[str] = None
+
+
+class StockConsensus(BaseModel):
+    ticker: str
+    name: str
+    consensus_date: Optional[str] = None
+    opinion_score: Optional[float] = None
+    average_target_price: Optional[int] = None
+    estimated_institutions: Optional[int] = None
+    top_targets: List[BrokerTarget] = []
+
+
+class ConsensusOutput(BaseModel):
+    meta: AgentMeta
+    stocks: List[StockConsensus] = []
+    source_urls: List[str] = []
+
+
 class MainScore(BaseModel):
     score: float = Field(ge=0, le=100)
     action: str
@@ -114,6 +140,7 @@ class DailyResult(BaseModel):
     nvidia: NvidiaSoxOutput
     macro: MacroOutput
     flow: FlowOutput
+    consensus: ConsensusOutput
     main_score: MainScore
     jensen_score: JensenScore
     validation: ValidationSummary

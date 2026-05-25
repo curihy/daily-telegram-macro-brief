@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from semiconductor_timing.schemas import DramHbmOutput, FlowOutput, JensenScore, MacroOutput, MainScore, NvidiaSoxOutput, ValidationPass, ValidationSummary
+from semiconductor_timing.schemas import ConsensusOutput, DramHbmOutput, FlowOutput, JensenScore, MacroOutput, MainScore, NvidiaSoxOutput, ValidationPass, ValidationSummary
 
 
 def pass1_integrity(
@@ -8,6 +8,7 @@ def pass1_integrity(
     macro: MacroOutput,
     dram: DramHbmOutput | None = None,
     flow: FlowOutput | None = None,
+    consensus: ConsensusOutput | None = None,
 ) -> ValidationPass:
     warnings: list[str] = []
     errors: list[str] = []
@@ -36,6 +37,10 @@ def pass1_integrity(
         errors.append(f"삼성전자 PBR 범위 이탈: {flow.samsung_pbr}")
     if flow and flow.hynix_pbr is not None and not 0 <= flow.hynix_pbr <= 10:
         errors.append(f"SK하이닉스 PBR 범위 이탈: {flow.hynix_pbr}")
+    if consensus and consensus.meta.confidence < 0.5:
+        warnings.append("증권사 컨센서스 수집 confidence 낮음")
+    if consensus and not consensus.stocks:
+        warnings.append("증권사 컨센서스 결측")
 
     return ValidationPass(name="Pass 1 데이터 무결성", passed=not errors, warnings=warnings, errors=errors)
 

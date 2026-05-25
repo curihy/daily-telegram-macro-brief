@@ -12,6 +12,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from semiconductor_timing.agents.dram_agent import DramAgent
+from semiconductor_timing.agents.consensus_agent import ConsensusAgent
 from semiconductor_timing.agents.flow_agent import FlowAgent
 from semiconductor_timing.agents.macro_agent import MacroAgent
 from semiconductor_timing.agents.nvidia_agent import NvidiaAgent
@@ -30,10 +31,11 @@ def main() -> None:
     nvidia = NvidiaAgent().run()
     macro = MacroAgent().run()
     flow = FlowAgent().run()
+    consensus = ConsensusAgent().run()
     main_score = calculate_main_score(nvidia, macro, dram, flow)
     jensen_score = calculate_jensen_score(nvidia)
     validation = summarize_validation([
-        pass1_integrity(nvidia, macro, dram, flow),
+        pass1_integrity(nvidia, macro, dram, flow, consensus),
         pass2_consistency(main_score, jensen_score),
     ])
 
@@ -43,6 +45,7 @@ def main() -> None:
         nvidia=nvidia,
         macro=macro,
         flow=flow,
+        consensus=consensus,
         main_score=main_score,
         jensen_score=jensen_score,
         validation=validation,
